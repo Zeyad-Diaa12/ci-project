@@ -3,6 +3,7 @@ import pandas as pd
 import numpy as np
 import matplotlib.pyplot as plt
 import seaborn as sns
+import plotly.graph_objects as go
 from sklearn.preprocessing import StandardScaler
 from sklearn.decomposition import PCA
 from sklearn.cluster import KMeans
@@ -168,24 +169,64 @@ if file_path:
             inertia = kmeans.inertia_
             silhouette = silhouette_score(X, labels) if len(np.unique(labels)) > 1 else 0
             return labels, centroids, inertia, silhouette
-        
-        # Function to create standardized plots
+          # Function to create standardized plots
         def create_cluster_plots(labels, centroids, X, X_scaled, features, scaler):
             # Create figures
             fig_2d, ax_2d = plt.subplots(figsize=(8, 6))
             
-            # If we have 3 or more features, show 3D plot
+            # If we have 3 or more features, create interactive 3D plot
             if len(features) >= 3:
-                fig_3d = plt.figure(figsize=(8, 6))
-                ax_3d = fig_3d.add_subplot(111, projection='3d')
+                # Create Plotly 3D scatter plot
+                fig_3d = go.Figure()
                 
-                # Plot 3D
-                ax_3d.scatter(X[:, 0], X[:, 1], X[:, 2], c=labels, alpha=0.7, cmap='viridis')
-                ax_3d.scatter(centroids[:, 0], centroids[:, 1], centroids[:, 2], marker='X', s=200, c='red')
-                ax_3d.set_xlabel(features[0])
-                ax_3d.set_ylabel(features[1])
-                ax_3d.set_zlabel(features[2])
-                ax_3d.set_title("3D Cluster Visualization")
+                # Add data points colored by cluster
+                colors = plt.cm.viridis(np.linspace(0, 1, k))
+                
+                # Add scatter points for each cluster
+                for i in range(k):
+                    cluster_points = X[labels == i]
+                    if len(cluster_points) > 0:
+                        fig_3d.add_trace(go.Scatter3d(
+                            x=cluster_points[:, 0],
+                            y=cluster_points[:, 1],
+                            z=cluster_points[:, 2],
+                            mode='markers',
+                            marker=dict(
+                                size=5,
+                                color=f'rgba({int(colors[i][0]*255)},{int(colors[i][1]*255)},{int(colors[i][2]*255)},{colors[i][3]})',
+                                opacity=0.7
+                            ),
+                            name=f'Cluster {i}'
+                        ))
+                
+                # Add centroids
+                fig_3d.add_trace(go.Scatter3d(
+                    x=centroids[:, 0],
+                    y=centroids[:, 1],
+                    z=centroids[:, 2],
+                    mode='markers',
+                    marker=dict(
+                        color='red',
+                        size=10,
+                        symbol='x'
+                    ),
+                    name='Centroids'
+                ))
+                
+                # Update layout
+                fig_3d.update_layout(
+                    title="3D Cluster Visualization (Drag to Rotate)",
+                    scene=dict(
+                        xaxis_title=features[0],
+                        yaxis_title=features[1],
+                        zaxis_title=features[2]
+                    ),
+                    margin=dict(l=0, r=0, b=0, t=40),
+                    legend=dict(
+                        x=0,
+                        y=1
+                    )
+                )
             else:
                 fig_3d = None
             
@@ -213,8 +254,7 @@ if file_path:
                 fig_pca = None
             
             return fig_2d, fig_3d, fig_pca
-        
-        # 1. K-Means Tab
+          # 1. K-Means Tab
         with tab1:
             st.header("K-Means Clustering (Baseline)")
             st.markdown("""
@@ -227,6 +267,10 @@ if file_path:
             2. Assign each data point to the nearest centroid
             3. Update centroids as the mean of assigned points
             4. Repeat steps 2-3 until convergence
+            
+            **Parameters:**
+            - **Number of clusters (k)**: Determines how many clusters the data will be divided into. Higher values create more granular clusters, while lower values create broader clusters. Choosing the optimal k is often problem-dependent.
+            - **Random seed**: Controls the initial placement of centroids. Different seeds can lead to different final clustering solutions, as K-Means is sensitive to initialization.
             
             **Pros:**
             - Simple and intuitive algorithm
@@ -262,7 +306,8 @@ if file_path:
                     # Display plots
                     st.pyplot(fig_2d)
                     if fig_3d:
-                        st.pyplot(fig_3d)
+                        st.subheader("Interactive 3D Visualization (Drag to Rotate)")
+                        st.plotly_chart(fig_3d, use_container_width=True)
                     if fig_pca:
                         st.pyplot(fig_pca)
                     
@@ -282,8 +327,7 @@ if file_path:
                         'inertia': inertia,
                         'silhouette': silhouette
                     }
-        
-        # 2. Global-Best PSO Tab
+          # 2. Global-Best PSO Tab
         with tab2:
             st.header("Global-Best PSO Clustering")
             st.markdown("""
@@ -300,6 +344,13 @@ if file_path:
                - Evaluate fitness (sum of squared distances)
                - Update personal and global best positions
             3. Final global best position represents the best centroids found
+            
+            **Parameters:**
+            - **Swarm size**: The number of particles in the swarm. Larger swarms explore more of the search space but require more computation. Typically 20-50 particles provide good results.
+            - **Max iterations**: Controls how long the algorithm runs. More iterations allow for better convergence but increase computation time. Should be set high enough to reach convergence.
+            - **Inertia weight (w)**: Controls how much of the previous velocity is retained. Higher values (0.8-1.0) favor exploration, while lower values (0.2-0.5) favor exploitation. Typical range is 0.4-0.9.
+            - **Cognitive coefficient (c1)**: Controls the influence of the particle's personal best. Higher values make particles more "nostalgic" and likely to return to their personal best positions. Typically set around 1.5-2.0.
+            - **Social coefficient (c2)**: Controls the influence of the global best. Higher values make particles more attracted to the global best position. Typically set around 1.5-2.0.
             
             **Pros:**
             - Can escape local minima better than K-Means
@@ -352,7 +403,8 @@ if file_path:
                     # Display plots
                     st.pyplot(fig_2d)
                     if fig_3d:
-                        st.pyplot(fig_3d)
+                        st.subheader("Interactive 3D Visualization (Drag to Rotate)")
+                        st.plotly_chart(fig_3d, use_container_width=True)
                     if fig_pca:
                         st.pyplot(fig_pca)
                     
@@ -372,8 +424,7 @@ if file_path:
                         'inertia': inertia,
                         'silhouette': silhouette
                     }
-        
-        # 3. Local-Best PSO Tab
+          # 3. Local-Best PSO Tab
         with tab3:
             st.header("Local-Best PSO Clustering")
             st.markdown("""
@@ -390,6 +441,13 @@ if file_path:
                - Evaluate fitness
                - Update personal and local best positions
             3. Final best position represents the best centroids found
+            
+            **Parameters:**
+            - **Swarm size**: The number of particles in the swarm. Larger swarms provide more diversity in the population, which is especially beneficial for Local-Best PSO's neighborhood structure. Typically 30-50 particles work well.
+            - **Max iterations**: Controls how long the algorithm runs. Local-Best PSO may need more iterations than Global-Best PSO to converge due to its slower information propagation through the swarm.
+            - **Inertia weight (w)**: Controls momentum of particles. In Local-Best PSO, slightly higher values (0.6-0.8) often work better to maintain exploration since local neighborhoods already restrict information flow.
+            - **Cognitive coefficient (c1)**: Controls the influence of the particle's personal best. In Local-Best PSO, balancing c1 and c2 is important for proper neighborhood influence.
+            - **Social coefficient (c2)**: Controls the influence of the neighborhood best. Should be balanced with c1, but slightly higher values can help information propagate through neighborhoods.
             
             **Pros:**
             - Better exploration of the search space
@@ -442,7 +500,8 @@ if file_path:
                     # Display plots
                     st.pyplot(fig_2d)
                     if fig_3d:
-                        st.pyplot(fig_3d)
+                        st.subheader("Interactive 3D Visualization (Drag to Rotate)")
+                        st.plotly_chart(fig_3d, use_container_width=True)
                     if fig_pca:
                         st.pyplot(fig_pca)
                     
@@ -462,8 +521,7 @@ if file_path:
                         'inertia': inertia,
                         'silhouette': silhouette
                     }
-        
-        # 4. Linear Inertia PSO Tab
+          # 4. Linear Inertia PSO Tab
         with tab4:
             st.header("Linear Inertia PSO Clustering")
             st.markdown("""
@@ -481,6 +539,14 @@ if file_path:
                - Evaluate fitness
                - Update personal and global best positions
             3. Final global best position represents the best centroids found
+            
+            **Parameters:**
+            - **Swarm size**: The number of particles in the swarm. Similar to standard PSO, but with Linear Inertia, smaller swarms (20-30) can sometimes work well since the adaptive inertia helps maintain diversity.
+            - **Max iterations**: Controls how long the algorithm runs. This parameter is particularly important for Linear Inertia PSO as it determines the schedule for decreasing the inertia weight.
+            - **Max inertia weight (w_max)**: The starting inertia weight value. Higher values (0.8-0.9) at the beginning promote exploration of the search space. This should be set significantly higher than w_min.
+            - **Min inertia weight (w_min)**: The final inertia weight value. Lower values (0.2-0.4) encourage exploitation near the end of the search process.
+            - **Cognitive coefficient (c1)**: Controls the influence of the particle's personal best. In Linear Inertia PSO, this often works well at standard values (1.5-2.0).
+            - **Social coefficient (c2)**: Controls the influence of the global best. Should generally balance with c1, but slightly higher values can work well as inertia decreases.
             
             **Pros:**
             - Good balance between exploration and exploitation
@@ -534,7 +600,8 @@ if file_path:
                     # Display plots
                     st.pyplot(fig_2d)
                     if fig_3d:
-                        st.pyplot(fig_3d)
+                        st.subheader("Interactive 3D Visualization (Drag to Rotate)")
+                        st.plotly_chart(fig_3d, use_container_width=True)
                     if fig_pca:
                         st.pyplot(fig_pca)
                     
@@ -554,8 +621,7 @@ if file_path:
                         'inertia': inertia,
                         'silhouette': silhouette
                     }
-        
-        # 5. Constriction Factor PSO Tab
+          # 5. Constriction Factor PSO Tab
         with tab5:
             st.header("Constriction Factor PSO Clustering")
             st.markdown("""
@@ -573,6 +639,12 @@ if file_path:
                - Evaluate fitness
                - Update personal and global best positions
             4. Final global best position represents the best centroids found
+            
+            **Parameters:**
+            - **Swarm size**: The number of particles in the swarm. For Constriction Factor PSO, smaller swarms (20-30) often work well since the constriction factor ensures convergence.
+            - **Max iterations**: Controls how long the algorithm runs. Constriction Factor PSO typically requires fewer iterations than standard PSO due to its guaranteed convergence properties.
+            - **Cognitive coefficient (c1)**: Controls the influence of the particle's personal best. In Constriction Factor PSO, both c1 and c2 are usually set higher (around 2.05 each) than in standard PSO.
+            - **Social coefficient (c2)**: Controls the influence of the global best. Must be set such that φ = c1 + c2 > 4 for the constriction formula to work properly. Usually set around 2.05.
             
             **Pros:**
             - Theoretically guaranteed convergence
@@ -626,7 +698,8 @@ if file_path:
                     # Display plots
                     st.pyplot(fig_2d)
                     if fig_3d:
-                        st.pyplot(fig_3d)
+                        st.subheader("Interactive 3D Visualization (Drag to Rotate)")
+                        st.plotly_chart(fig_3d, use_container_width=True)
                     if fig_pca:
                         st.pyplot(fig_pca)
                     
@@ -666,6 +739,14 @@ if file_path:
                - Evaluate fitness
                - Update personal and global best positions
             4. Final global best position represents the best centroids found
+            
+            **Parameters:**
+            - **Swarm size**: The number of particles in the swarm. Similar to standard PSO, but with velocity clamping a moderate swarm size (25-40) often works well.
+            - **Max iterations**: Controls how long the algorithm runs. Velocity-Clamped PSO may require fewer iterations than standard PSO since particles are prevented from making excessively large steps.
+            - **Inertia weight (w)**: Controls how much of the previous velocity is retained. With velocity clamping, moderate values (0.5-0.7) are often effective.
+            - **Cognitive coefficient (c1)**: Controls the influence of the particle's personal best. Standard values around 1.5-2.0 work well with velocity clamping.
+            - **Social coefficient (c2)**: Controls the influence of the global best. Should be balanced with c1, typically around 1.5-2.0.
+            - **Velocity max fraction**: Defines the maximum velocity as a fraction of the data range. This is crucial for controlling particle movement - too low (0.1) restricts exploration, too high (0.5) allows more erratic movement. Typically values between 0.1-0.3 work well for clustering.
             
             **Pros:**
             - Prevents erratic particle movements
@@ -719,7 +800,8 @@ if file_path:
                     # Display plots
                     st.pyplot(fig_2d)
                     if fig_3d:
-                        st.pyplot(fig_3d)
+                        st.subheader("Interactive 3D Visualization (Drag to Rotate)")
+                        st.plotly_chart(fig_3d, use_container_width=True)
                     if fig_pca:
                         st.pyplot(fig_pca)
                     
@@ -743,8 +825,7 @@ if file_path:
         # 7. PSO with Mutation Tab
         with tab7:
             st.header("PSO with Gaussian Mutation")
-            st.markdown("""
-            **Description:**
+            st.markdown("""            **Description:**
             
             PSO with Gaussian Mutation introduces random perturbations to some particles during the search. 
             This additional randomness helps avoid premature convergence and enhances exploration.
@@ -757,6 +838,15 @@ if file_path:
                - Evaluate fitness
                - Update personal and global best positions
             3. Final global best position represents the best centroids found
+            
+            **Parameters:**
+            - **Swarm size**: The number of particles in the swarm. For PSO with Gaussian Mutation, a moderate swarm size (25-40) often works well. With mutation adding diversity, smaller swarms can sometimes perform effectively.
+            - **Max iterations**: Controls how long the algorithm runs. PSO with Gaussian Mutation may require more iterations to fully converge due to the added randomness.
+            - **Inertia weight (w)**: Controls how much of the previous velocity is retained. Standard values around 0.5-0.7 work well with mutation, as the mutation adds additional exploration capability.
+            - **Cognitive coefficient (c1)**: Controls the influence of the particle's personal best. Standard values around 1.5-2.0 work well.
+            - **Social coefficient (c2)**: Controls the influence of the global best. Standard values around 1.5-2.0 work well.
+            - **Mutation probability**: Determines how often particles undergo mutation. Higher values (0.3-0.5) increase exploration but may slow convergence, while lower values (0.05-0.15) provide occasional helpful randomness. Critical for escaping local optima.
+            - **Mutation scale**: Controls the magnitude of the Gaussian noise added during mutation. Larger values cause more significant position changes. Typically small values (0.01-0.1) work best, with smaller values preferred as the algorithm progresses.
             
             **Pros:**
             - Enhanced exploration capability
@@ -811,7 +901,8 @@ if file_path:
                     # Display plots
                     st.pyplot(fig_2d)
                     if fig_3d:
-                        st.pyplot(fig_3d)
+                        st.subheader("Interactive 3D Visualization (Drag to Rotate)")
+                        st.plotly_chart(fig_3d, use_container_width=True)
                     if fig_pca:
                         st.pyplot(fig_pca)
                     
@@ -834,8 +925,7 @@ if file_path:
         # 8. Auto-Parameter Tuning Tab
         with tab8:
             st.header("Auto-Parameter Tuning")
-            st.markdown("""
-            **Description:**
+            st.markdown("""            **Description:**
             
             This tab automatically tunes parameters for all PSO variations and K-Means to find the best configuration for each algorithm.
             The system will run multiple iterations with different parameter combinations and select the best performing set.
@@ -846,6 +936,11 @@ if file_path:
             3. Evaluate results using silhouette score and inertia
             4. Select the best parameter set for each algorithm
             5. Compare all algorithms with their best parameters
+            
+            **Parameters:**
+            - **Number of runs per parameter set**: Controls how many times each parameter combination is tested. Higher values (5-10) provide more reliable results by averaging out randomness, but significantly increase computation time. Lower values (1-3) are faster but may be influenced by lucky/unlucky initializations.
+            - **Optimization metric**: Determines which performance measure is used to select the best parameters. "Silhouette Score" prioritizes well-separated, compact clusters, while "Inertia" focuses on minimizing within-cluster distances. Choose based on your clustering objectives.
+            - **Number of parameter variations to try**: Controls how many different values to test for each parameter. Higher values (4-5) explore the parameter space more thoroughly but increase computation time exponentially. Lower values (2-3) provide faster results but may miss optimal settings.
             
             **Benefits:**
             - Automatically finds optimal parameters without manual tuning
@@ -1381,7 +1476,8 @@ if file_path:
                     # Display plots
                     st.pyplot(fig_2d)
                     if fig_3d:
-                        st.pyplot(fig_3d)
+                        st.subheader("Interactive 3D Visualization (Drag to Rotate)")
+                        st.plotly_chart(fig_3d, use_container_width=True)
                     if fig_pca:
                         st.pyplot(fig_pca)
                     
